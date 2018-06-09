@@ -28,9 +28,8 @@ describe('nodeModulesRecipe', function () {
   })
   it("doesn't install when unnecessary", async function (): Promise<void> {
     await exec(`npm i --ignore-scripts`, {cwd})
-    await touch(packageJsonFile, {time: Date.now() - 60000})
-    await touch(path.resolve(nodeModulesDir, 'lodash.omit'), {time: Date.now()})
-    await touch(nodeModulesDir, {time: Date.now() - 120000})
+    await exec(`npm i lodash.omit`, {cwd})
+    await touch(packageJsonFile, {time: Date.now() + 1000})
     const {stdout, stderr} = await exec(`babel-node promake node_modules`, {cwd})
     console.log(stdout, stderr) // eslint-disable-line no-console
     expect(stderr).to.match(/^\[promake\] Nothing to be done for node_modules$/m)

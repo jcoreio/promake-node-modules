@@ -46,7 +46,10 @@ function nodeModulesRecipe(installNodeModules: (rule: Rule) => ?Promise<any>): (
       const maxPackageMtime = Math.max(...packageMtimes)
       const maxPrerequisiteMtime = Math.max(...prerequisiteMtimes)
 
-      if (maxPackageMtime > maxPrerequisiteMtime) {
+      // allow the prerequisites to be up to 5 seconds newer than the packages.
+      // after installing a new package, the updated package.json will tend
+      // to be a second or two newer than the new package directory
+      if (maxPackageMtime + 5000 > maxPrerequisiteMtime) {
         log(VERBOSITY.DEFAULT, `Nothing to be done for ${path.relative(process.cwd(), targetDir)}`)
         return
       }
