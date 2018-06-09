@@ -13,3 +13,24 @@ promake rule for installing node_modules
 npm install --save promake-node-modules
 ```
 
+<<<<<<< HEAD
+=======
+## Tools used
+
+* babel 6
+* babel-preset-env
+* mocha
+* chai
+* istanbul
+* nyc
+* babel-plugin-istanbul
+* eslint
+* eslint-watch
+* flow
+* flow-watch
+* pre-commit (runs eslnt and flow)
+* semantic-release
+* Travis CI
+* Coveralls
+
+>>>>>>> 64a28e8dee85439440c560f36ab9f00ef416b409

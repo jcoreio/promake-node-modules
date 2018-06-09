@@ -2,6 +2,7 @@
 
 import path from 'path'
 import Promake from 'promake'
+import type {Resource} from 'promake'
 import type Rule from 'promake/lib/Rule'
 import fs from 'fs'
 import promisify from 'es6-promisify'
@@ -23,7 +24,7 @@ async function lastModified(file: string): Promise<?number> {
   }
 }
 
-function nodeModulesRecipe(installNodeModules?: (rule: Rule) => ?Promise<any>): (rule: Rule) => ?Promise<any> {
+function nodeModulesRecipe(installNodeModules: (rule: Rule) => ?Promise<any>): (rule: Rule) => ?Promise<any> {
   return async function installNodeModulesIfNecessary(rule: Rule): Promise<any> {
     const log = rule ? rule.promake.log : (...args: Array<any>) => {}
 
@@ -37,7 +38,7 @@ function nodeModulesRecipe(installNodeModules?: (rule: Rule) => ?Promise<any>): 
     if (packages.length) {
       const packageMtimes = await Promise.all(packages.map(lastModified))
       const prerequisiteMtimes = await Promise.all(prerequisites.map(
-        async prerequisite => {
+        async (prerequisite: Resource): Promise<number> => {
           const mtime = await prerequisite.lastModified()
           return mtime != null ? mtime : -Infinity
         }
@@ -46,21 +47,12 @@ function nodeModulesRecipe(installNodeModules?: (rule: Rule) => ?Promise<any>): 
       const maxPrerequisiteMtime = Math.max(...prerequisiteMtimes)
 
       if (maxPackageMtime > maxPrerequisiteMtime) {
-        log(VERBOSITY.DEFAULT, 'Nothing to be done for', target)
+        log(VERBOSITY.DEFAULT, `Nothing to be done for ${path.relative(process.cwd(), targetDir)}`)
         return
       }
     }
 
-    if (installNodeModules) {
-      await installNodeModules(rule)
-    } else {
-      const {promake: {spawn}} = rule
-      const hasYarn = prerequisites.find(prerequisite =>
-        path.resolve(prerequisite.file) === path.resolve(targetDir, '..', 'yarn.lock')
-      )
-      if (hasYarn) await spawn('yarn', ['--ignore-scripts'])
-      else await spawn('npm', ['install', '--ignore-scripts'])
-    }
+    await installNodeModules(rule)
     await touch(targetDir)
   }
 }
