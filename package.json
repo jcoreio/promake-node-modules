@@ -1,7 +1,7 @@
 {
   "name": "promake-node-modules",
   "version": "0.0.0-development",
-  "description": "promake rule for installing node_modules",
+  "description": "promake rule for installing node_modules only when necessary",
   "main": "lib/index.js",
   "module": "es/index.js",
   "sideEffects": false,
@@ -45,7 +45,7 @@
     "url": "https://github.com/jcoreio/promake-node-modules.git"
   },
   "keywords": [
-    "es2015"
+    "promake"
   ],
   "author": "Andy Edwards",
   "license": "MIT",
