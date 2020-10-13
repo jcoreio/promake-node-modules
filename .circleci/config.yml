@@ -26,9 +26,5 @@ jobs:
           command: yarn toolchain prepublishOnly
 
       - run:
-          name: upload coverage
-          command: yarn toolchain codecov
-
-      - run:
           name: release
           command: yarn toolchain release
