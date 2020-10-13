@@ -1,37 +1,138 @@
-// @flow
-
-import {describe, it} from 'mocha'
-import {exec} from 'promisify-child-process'
-import {expect} from 'chai'
+import Promake from 'promake'
 import fs from 'fs-extra'
-import touch from 'touch'
+import nodeModulesRule from '../src/index.js'
+import { describe, it, beforeEach } from 'mocha'
+import { expect } from 'chai'
 import path from 'path'
-import promisify from 'es6-promisify'
 
-async function getMTime(file: string): Promise<number> {
-  return (await promisify(fs.stat)(file)).mtime.getTime()
-}
+const projectDir = path.resolve(__dirname, 'fixture')
+const fixture = (...p) => path.join(projectDir, ...p)
 
-const cwd = path.resolve(__dirname, 'integration')
-const packageJsonFile = path.resolve(cwd, 'package.json')
-const nodeModulesDir = path.resolve(cwd, 'node_modules')
+let runCount = 0
+beforeEach(async () => {
+  runCount = 0
+  console.log('removing', projectDir) // eslint-disable-line no-console
+  await fs.remove(projectDir)
+  await fs.mkdirs(projectDir)
+})
 
-describe('nodeModulesRecipe', function () {
-  this.timeout(15 * 60000)
-
-  it('installs when necessary', async function (): Promise<void> {
-    await fs.remove(nodeModulesDir)
-    const {stdout, stderr} = await exec(`babel-node promake node_modules`, {cwd})
-    console.log(stdout, stderr) // eslint-disable-line no-console
-    expect(stderr).not.to.match(/^\[promake\] Nothing to be done for node_modules$/m)
-    expect(await getMTime(nodeModulesDir)).not.to.be.below(await getMTime(packageJsonFile))
+describe(`without additionalFiles`, function () {
+  const promake = new Promake()
+  const rule = nodeModulesRule({
+    promake,
+    projectDir,
+    command: 'yarn',
+    before: () => runCount++,
   })
-  it("doesn't install when unnecessary", async function (): Promise<void> {
-    await exec(`npm i --ignore-scripts`, {cwd})
-    await exec(`npm i lodash.omit`, {cwd})
-    await touch(packageJsonFile, {time: Date.now() + 1000})
-    const {stdout, stderr} = await exec(`babel-node promake node_modules`, {cwd})
-    console.log(stdout, stderr) // eslint-disable-line no-console
-    expect(stderr).to.match(/^\[promake\] Nothing to be done for node_modules$/m)
+  const task = promake.task('deps', [rule])
+
+  it(`doesn't rerun if deps haven't changed`, async function () {
+    this.timeout(10000)
+    const packageJson = {
+      name: 'temp',
+      private: true,
+      dependencies: {
+        lodash: '^4.0.0',
+      },
+    }
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(await fs.exists(fixture('node_modules', 'lodash'))).to.be.true
+    expect(runCount).to.equal(1)
+
+    packageJson.foo = 'bar' // this shouldn't affect it
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await task // make sure the task wrapper works
+    expect(runCount).to.equal(1)
+  })
+  it(`doesn't rerun if additional files haven't changed`, async function () {
+    this.timeout(10000)
+    const packageJson = {
+      name: 'temp',
+      private: true,
+      dependencies: {
+        lodash: '^4.0.0',
+      },
+    }
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(await fs.exists(fixture('node_modules', 'lodash'))).to.be.true
+    expect(runCount).to.equal(1)
+
+    packageJson.foo = 'bar' // this shouldn't affect it
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(runCount).to.equal(1)
+  })
+  it(`reruns if deps changed`, async function () {
+    this.timeout(10000)
+    const packageJson = {
+      name: 'temp',
+      private: true,
+      dependencies: {
+        lodash: '^4.0.0',
+      },
+    }
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(await fs.exists(fixture('node_modules', 'lodash'))).to.be.true
+    expect(runCount).to.equal(1)
+
+    packageJson.dependencies.lodash = '^4.1.0'
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(runCount).to.equal(2)
+  })
+  it(`reruns if resolutions changed`, async function () {
+    this.timeout(10000)
+    const packageJson = {
+      name: 'temp',
+      private: true,
+      dependencies: {
+        lodash: '^4.0.0',
+      },
+    }
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(await fs.exists(fixture('node_modules', 'lodash'))).to.be.true
+    expect(runCount).to.equal(1)
+
+    packageJson.resolutions = { lodash: '4.0.0' }
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(runCount).to.equal(2)
+  })
+})
+describe(`with additionalFiles`, function () {
+  const promake = new Promake()
+  const rule = nodeModulesRule({
+    promake,
+    projectDir,
+    command: 'yarn',
+    before: () => runCount++,
+    additionalFiles: [fixture('yarn.lock')],
+  })
+
+  it(`doesn't rerun if deps haven't changed`, async function () {
+    this.timeout(10000)
+    const packageJson = {
+      name: 'temp',
+      private: true,
+      dependencies: {
+        lodash: '^4.0.0',
+      },
+    }
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(await fs.exists(fixture('node_modules', 'lodash'))).to.be.true
+    expect(runCount).to.equal(1)
+
+    await rule
+    expect(runCount).to.equal(2) // ran again because yarn.lock got created
+
+    packageJson.foo = 'bar' // this shouldn't affect it
+    await fs.writeJson(fixture('package.json'), packageJson)
+    await rule
+    expect(runCount).to.equal(2)
   })
 })

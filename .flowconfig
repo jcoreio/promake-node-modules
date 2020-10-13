@@ -1,14 +1,11 @@
 [ignore]
-<PROJECT_ROOT>/lib/.*
-<PROJECT_ROOT>/es/.*
 
 [include]
-./src
-./test
 
 [libs]
 
+[lints]
+
 [options]
-module.system=node
-esproposal.class_static_fields=enable
-esproposal.class_instance_fields=enable
+
+[strict]

@@ -1,62 +1,105 @@
 // @flow
 
 import path from 'path'
-import Promake from 'promake'
-import type {Resource} from 'promake'
-import type Rule from 'promake/lib/Rule'
+import type Promake from 'promake'
+import type HashRule from 'promake/HashRule'
+import { type Resource } from 'promake/Resource'
+import { type HashResource } from 'promake/HashResource'
+import FileResource from 'promake/FileResource'
+import { promisify } from 'util'
 import fs from 'fs'
-import promisify from 'es6-promisify'
-import _glob from 'glob'
-import touch from 'touch'
+import emitted from 'p-event'
 
-const {VERBOSITY} = Promake
+class DependenciesHashResource implements Resource, HashResource {
+  projectDir: string
+  packageJsonFile: FileResource
+  additionalFiles: Array<FileResource>
 
-const glob = promisify(_glob)
-const stat = promisify(fs.stat)
-
-async function lastModified(file: string): Promise<?number> {
-  try {
-    const {mtimeMs, mtime} = await stat(file)
-    return mtimeMs != null ? mtimeMs : mtime.getTime()
-  } catch (err) {
-    if (err.code === 'ENOENT') return null
-    throw err
+  constructor(
+    projectDir: string,
+    { additionalFiles }: { additionalFiles?: ?$ReadOnlyArray<string> } = {}
+  ) {
+    this.projectDir = projectDir
+    this.packageJsonFile = new FileResource(
+      path.join(projectDir, 'package.json')
+    )
+    this.additionalFiles = (additionalFiles || []).map(
+      (file) => new FileResource(file)
+    )
   }
-}
 
-function nodeModulesRecipe(installNodeModules: (rule: Rule) => ?Promise<any>): (rule: Rule) => ?Promise<any> {
-  return async function installNodeModulesIfNecessary(rule: Rule): Promise<any> {
-    const log = rule ? rule.promake.log : (...args: Array<any>) => {}
-
-    const {targets, prerequisites} = rule
-    if (targets.length > 1) throw new Error('there must be only one target (the node_modules directory)')
-    const target = targets[0]
-    const targetDir = (target: any).file
-    if (typeof targetDir !== 'string') throw new Error('target must have a `file` property that is the node_modules directory')
-
-    const packages = [...await glob(path.join(targetDir, '*')), ...await glob(path.join(targetDir, '@*', '*'))]
-    if (packages.length) {
-      const packageMtimes = await Promise.all(packages.map(lastModified))
-      const prerequisiteMtimes = await Promise.all(prerequisites.map(
-        async (prerequisite: Resource): Promise<number> => {
-          const mtime = await prerequisite.lastModified()
-          return mtime != null ? mtime : -Infinity
-        }
-      ))
-      const maxPackageMtime = Math.max(...packageMtimes)
-      const maxPrerequisiteMtime = Math.max(...prerequisiteMtimes)
-
-      // allow the prerequisites to be up to 5 seconds newer than the packages.
-      // after installing a new package, the updated package.json will tend
-      // to be a second or two newer than the new package directory
-      if (maxPackageMtime + 5000 > maxPrerequisiteMtime) {
-        log(VERBOSITY.DEFAULT, `Nothing to be done for ${path.relative(process.cwd(), targetDir)}`)
-        return
-      }
+  async updateHash(hash: crypto$Hash) {
+    const { dependencies, devDependencies, resolutions } = JSON.parse(
+      await promisify(fs.readFile)(
+        path.join(this.projectDir, 'package.json'),
+        'utf8'
+      )
+    )
+    hash.update(JSON.stringify({ dependencies, devDependencies, resolutions }))
+    for (const resource of this.additionalFiles) {
+      const stream = fs.createReadStream(resource.file)
+      await Promise.all([
+        emitted(stream, 'end'),
+        stream.pipe(hash, { end: false }),
+      ]).catch((err: Error) => {
+        if ((err: any).code !== 'ENOENT') throw err
+      })
     }
+  }
 
-    await installNodeModules(rule)
-    await touch(targetDir)
+  toString(): string {
+    return `${path.relative(
+      process.cwd(),
+      path.resolve(this.projectDir, 'node_modules')
+    )}`
+  }
+
+  async lastModified(): Promise<?number> {
+    const timestamps = await Promise.all([
+      this.packageJsonFile.lastModified(),
+      ...this.additionalFiles.map((r) => r.lastModified()),
+    ])
+    if (timestamps.findIndex((t) => !Number.isFinite(t))) return 0
+    return Math.max(...(timestamps: any))
   }
 }
-exports.nodeModulesRecipe = nodeModulesRecipe
+
+export default function nodeModulesRule({
+  promake,
+  projectDir: _projectDir,
+  command,
+  args,
+  before,
+  additionalFiles,
+}: $ReadOnly<{
+  promake: Promake,
+  projectDir?: ?string,
+  command: string,
+  args?: ?$ReadOnlyArray<string>,
+  before?: ?() => mixed,
+  additionalFiles?: ?$ReadOnlyArray<string>,
+}> = {}): HashRule {
+  const projectDir = _projectDir || process.cwd()
+  const resource = new DependenciesHashResource(projectDir, { additionalFiles })
+  return promake.hashRule(
+    'md5',
+    path.join(projectDir, 'node_modules', '.cache', 'promake-node-modules.md5'),
+    [resource],
+    async (rule: HashRule) => {
+      if (before) before()
+      await promake.spawn(
+        command || 'npm',
+        [...(args || ['install']), ...rule.args],
+        {
+          cwd: projectDir,
+        }
+      )
+      await promisify(fs.mkdir)(
+        path.join(projectDir, 'node_modules', '.cache')
+      ).catch((err: Error) => {
+        if ((err: any).code !== 'EEXIST') throw err
+      })
+    },
+    { runAtLeastOnce: true }
+  )
+}
