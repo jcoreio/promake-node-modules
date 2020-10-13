@@ -27,16 +27,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jcoreio/promake-yarn.git"
+    "url": "https://github.com/jcoreio/promake-node-modules.git"
   },
   "keywords": [
     "promake",
     "yarn"
   ],
   "bugs": {
-    "url": "https://github.com/jcoreio/promake-yarn/issues"
+    "url": "https://github.com/jcoreio/promake-node-modules/issues"
   },
-  "homepage": "https://github.com/jcoreio/promake-yarn#readme",
+  "homepage": "https://github.com/jcoreio/promake-node-modules#readme",
   "devDependencies": {
     "@jedwards1211/js-toolchain": "^1.5.3",
     "flow-bin": "^0.135.0",
