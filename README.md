@@ -6,7 +6,8 @@
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![npm version](https://badge.fury.io/js/promake-yarn.svg)](https://badge.fury.io/js/promake-yarn)
 
-Promake rule for installing node_modules only when necessary
+Promake rule for installing node_modules only when necessary. It also prevents install processes from running
+simultaneously, since that's easy to do accidentally when some targets depend on a node_modules rule.
 
 # Usage
 

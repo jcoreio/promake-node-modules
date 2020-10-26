@@ -83,6 +83,27 @@ describe(`without additionalFiles`, function () {
     await rule
     expect(runCount).to.equal(2)
   })
+  it(`waits for another install if it's running`, async function () {
+    this.timeout(10000)
+    const packageJson = {
+      name: 'temp',
+      private: true,
+      dependencies: {
+        lodash: '^4.0.0',
+      },
+    }
+    await fs.writeJson(fixture('package.json'), packageJson)
+
+    const promake2 = new Promake()
+    const rule2 = nodeModulesRule({
+      promake: promake2,
+      projectDir,
+      command: 'yarn',
+      before: () => runCount++,
+    })
+
+    await Promise.all([rule, rule2])
+  })
   it(`reruns if resolutions changed`, async function () {
     this.timeout(10000)
     const packageJson = {

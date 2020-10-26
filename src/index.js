@@ -7,8 +7,9 @@ import { type Resource } from 'promake/Resource'
 import { type HashResource } from 'promake/HashResource'
 import FileResource from 'promake/FileResource'
 import { promisify } from 'util'
-import fs from 'fs'
+import fs from 'fs-extra'
 import emitted from 'p-event'
+import lockFile from 'lockfile'
 
 class DependenciesHashResource implements Resource, HashResource {
   projectDir: string
@@ -81,24 +82,31 @@ export default function nodeModulesRule({
 }> = {}): HashRule {
   const projectDir = _projectDir || process.cwd()
   const resource = new DependenciesHashResource(projectDir, { additionalFiles })
+  const cacheDir = path.join(projectDir, 'node_modules', '.cache')
+  const mutex = path.join(cacheDir, 'promake-node-modules-mutex')
   return promake.hashRule(
     'md5',
-    path.join(projectDir, 'node_modules', '.cache', 'promake-node-modules.md5'),
+    path.join(cacheDir, 'promake-node-modules.md5'),
     [resource],
     async (rule: HashRule) => {
       if (before) before()
-      await promake.spawn(
-        command || 'npm',
-        [...(args || ['install']), ...rule.args],
-        {
-          cwd: projectDir,
-        }
-      )
-      await promisify(fs.mkdir)(
-        path.join(projectDir, 'node_modules', '.cache')
-      ).catch((err: Error) => {
-        if ((err: any).code !== 'EEXIST') throw err
+      await fs.mkdirs(cacheDir)
+      await promisify(lockFile.lock)(mutex, {
+        retries: 600,
+        retryWait: 500,
+        stale: 60000,
       })
+      try {
+        await promake.spawn(
+          command || 'npm',
+          [...(args || ['install']), ...rule.args],
+          {
+            cwd: projectDir,
+          }
+        )
+      } finally {
+        await promisify(lockFile.unlock)(mutex)
+      }
     },
     { runAtLeastOnce: true }
   )
