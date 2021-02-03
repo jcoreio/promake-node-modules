@@ -2,6 +2,7 @@
 
 import path from 'path'
 import type Promake from 'promake'
+import type Rule from 'promake/Rule'
 import type HashRule from 'promake/HashRule'
 import { type Resource } from 'promake/Resource'
 import { type HashResource } from 'promake/HashResource'
@@ -79,7 +80,7 @@ export default function nodeModulesRule({
   args?: ?$ReadOnlyArray<string>,
   before?: ?() => mixed,
   additionalFiles?: ?$ReadOnlyArray<string>,
-}> = {}): HashRule {
+}>): HashRule {
   const projectDir = _projectDir || process.cwd()
   const resource = new DependenciesHashResource(projectDir, { additionalFiles })
   const cacheDir = path.join(projectDir, 'node_modules', '.cache')
@@ -88,7 +89,7 @@ export default function nodeModulesRule({
     'md5',
     path.join(cacheDir, 'promake-node-modules.md5'),
     [resource],
-    async (rule: HashRule) => {
+    async (rule: Rule) => {
       if (before) before()
       await fs.mkdirs(cacheDir)
       await promisify(lockFile.lock)(mutex, {
