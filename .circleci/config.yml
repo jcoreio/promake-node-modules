@@ -33,3 +33,11 @@ jobs:
       - run:
           name: release
           command: yarn toolchain release
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build:
+          context:
+            - npm-release
