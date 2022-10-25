@@ -71,17 +71,27 @@ export default function nodeModulesRule({
   projectDir: _projectDir,
   command,
   args,
+  install: _install,
   before,
   additionalFiles,
 }: $ReadOnly<{
   promake: Promake,
   projectDir?: ?string,
-  command: string,
-  args?: ?$ReadOnlyArray<string>,
-  before?: ?() => mixed,
+  command?: ?string,
+  args?: ?(string[]),
+  install?: ?(options: {| rule: Rule, projectDir: string |}) => Promise<any>,
+  before?: () => mixed,
   additionalFiles?: ?$ReadOnlyArray<string>,
 }>): HashRule {
   const projectDir = _projectDir || process.cwd()
+  const install =
+    _install ||
+    (({ rule, projectDir }) =>
+      promake.spawn(
+        command || 'npm',
+        [...(args || ['install']), ...rule.args],
+        { cwd: projectDir }
+      ))
   const resource = new DependenciesHashResource(projectDir, { additionalFiles })
   const cacheDir = path.join(projectDir, 'node_modules', '.cache')
   const mutex = path.join(cacheDir, 'promake-node-modules-mutex')
@@ -90,7 +100,7 @@ export default function nodeModulesRule({
     path.join(cacheDir, 'promake-node-modules.md5'),
     [resource],
     async (rule: Rule) => {
-      if (before) before()
+      await before?.()
       await fs.mkdirs(cacheDir)
       await promisify(lockFile.lock)(mutex, {
         retries: 600,
@@ -98,13 +108,7 @@ export default function nodeModulesRule({
         stale: 60000,
       })
       try {
-        await promake.spawn(
-          command || 'npm',
-          [...(args || ['install']), ...rule.args],
-          {
-            cwd: projectDir,
-          }
-        )
+        await install({ rule, projectDir })
       } finally {
         await promisify(lockFile.unlock)(mutex)
       }

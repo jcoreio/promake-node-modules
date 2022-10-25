@@ -52,15 +52,19 @@ The instance of `Promake` to add the rule to.
 
 The path to the project directory to install `node_modules` in.
 
-#### `command` (`string`, _optional_, default: `'npm'`)
+#### `options.command` (`string`, _optional_, default: `'npm'`)
 
 The command to run to install `node_modules`.
 
-#### `args` (`string[]`, _optional_, default: `['install']`)
+#### `options.args` (`string[]`, _optional_, default: `['install']`)
 
 The arguments for the install `command`.
 
-#### `additionalFiles` (`string[]`, _optional_)
+#### `options.install` (`(options: {rule: Rule, projectDir: string}) => Promise<any>`)
+
+Custom function to perform installation (overrides `command` and `args`)
+
+#### `options.additionalFiles` (`string[]`, _optional_)
 
 Additional files to include in the hash. You can put lockfiles in here, but be aware that
 if you run a command that updates the lockfile, it will cause this rule to run again (since
